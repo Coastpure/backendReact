@@ -1,0 +1,287 @@
+>composer create-project laravel/laravel backendReact 
+
+create database from xampp and configure it on .env
+
+create model and migration table
+
+>php artisan make:model Flight --migration
+
+add table properties, open create_books_table.php
+
+
+table->increments('id');
+$table->string('title');
+$table->string('author');
+
+open model class, Book.php
+
+define property
+
+protected $fillable = ['title', 'author','publisher'];
+protected $table = 'books';
+
+migrate to generate the table
+
+
+generate a resource class
+
+
+What are Laravel Resources
+Laravel Resources are another layer added on top of Laravel Eloquent models. It allows creating a uniform format or shapes for the data returned for these Eloquent models
+
+Why Use Laravel Resources
+It's important to make sure the correct data is being sent in your APIs. For example, you don't want to accidentally send secret data like keys or tokens related to users or other models in your APIs.
+Furthermore, when building APIs, it's important that the structure of data is the same across requests.
+
+>php artisan make:resource BookResource
+
+change some properties, remove toArray() with 
+
+return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'author' => $this->author,
+            'publisher' => $this->publisher,
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at,
+        ];
+
+
+Implement API routes and add routes
+
+open api.php file
+
+add a route so that we can retry it on the book record on the databse
+
+Route::get('/books', function(){
+    return BookResource::collection(Book::all());
+});
+
+Route::get('/book/{id}', function ($id) {
+    return new BookResource(Book::findOrFail($id));
+});
+
+
+>php artisan serve 
+
+open postman make a get request
+write http://127.0.0.1:8000/api/books and click send
+
+generate resource controller class and implements
+
+search resource controllers on documentation 
+copy the command and run 
+
+>php artisan make:controller BookController --resource
+
+This command will generate a controller at app/Http/Controllers/BookController.php
+
+now implement all methods of controller class
+at first we will implement index method
+open bookcontroller 
+
+in index function Display a listing of the resource., add 
+
+public function index()
+    {
+        return Book::all();
+    }
+
+and then implement store method so that we can store amewly created resource
+
+in store function 
+public function store(Request $request)
+    {
+        $input = $request->all();
+        //validation
+        $validator = Validator::make($input,[
+            'title' => 'required',
+            'author' => 'required',
+            'publisher' => 'required',
+        ]);
+        //if validation fails it will return a message with an eror
+        if($validator->fails()){
+            return $this->sendError('validation Error', $validator->errors());
+        }
+        //otherwise it will store the book record and return response with message
+        $book = Book::create($input);
+        //return response
+        return response()->json([
+            'success' => true,
+            'message' => 'Book Record Created Succesfully',
+            'book' => $book
+        ]);
+    }
+
+    add another route so that we can send a post request to store the record into the database
+    in api.php make another route with a 'store' method
+
+    Route::post('/book', [BookController::class, 'store']);
+
+
+
+
+test the api on postman 
+http://127.0.0.1:8000/api/book
+  select POST method 
+  select body, select raw and JSON on the drop down
+
+now we are going to send the json data to the database 
+
+type 
+{
+    "title":"My Book Title",
+    "author":"My Book Author",
+    "publisher":"My Book Publisher"
+
+}
+then click send 
+
+to retrieve the books record 
+http://127.0.0.1:8000/api/books 
+change to GET and click send
+
+Now we will implement another method and routes, on api.php add two routes 
+
+//Update books
+Route::put('/book/{id}', [BookController::class, 'update']);
+
+//Delete listing
+Route::delete('/book/{id}', [BookController::class, 'destroy']);
+
+
+now we make their controller
+
+ public function show($id)
+    {
+        return Book::find($id);
+    }
+
+
+For updating the book 
+
+
+    //Update the book
+    public function update(Request $request, $id)
+    {
+        //find book record by it's id
+       if(Book::where('id',$id)->exists()){
+        $book = Book::find($id);
+        //if the book record exists it will retrieve in editable form
+        $book->title = $request->title;
+        $book->author = $request->author;
+        $book->publisher = $request->publisher;
+        //and then save the updated record
+        $book ->save();
+        //and return a response with this message
+        return response()->json([
+            'message' => 'Book Record Updated Succesfully'
+        ], 200);
+       }
+       //otherwise if book not found it will return this message
+       else {
+        return response()->json([
+            'message' => 'Book Record Not Found'
+        ], 404);
+       }
+    }
+
+
+
+For deleting the book 
+
+public function destroy($id)
+    {
+        if(Book::where('id',$id)->exists()){
+            $book = Book::find($id);
+            $book ->delete();
+            return response()->json([
+                'message' => 'Book Record Deleted Succesfully'
+            ], 200);
+        }
+        else {
+            return response()->json([
+                'message' => 'Book Record Not Found'
+            ], 404);
+           }
+    }
+
+
+
+now verify the application from postman 
+select PUT method 
+change something eg book title
+click send
+it shows 
+"message": "Book Record Updated Succesfully"
+
+cheeck if book title changed, change to GET and send
+
+
+DISABLE DATA-WRAPPING
+
+now let's disable  data-wrapping outermost resource
+
+Data Wrapping
+By default, your outermost resource is wrapped in a data key when the resource response is converted to JSON. So, for example, a typical resource collection response looks like the following:
+
+"data": [
+        {
+            "id": 1,
+            "name": "Eladio Schroeder Sr.",
+            "email": "therese28@example.com"
+        },
+
+read more on 
+https://laravel.com/docs/9.x/eloquent-resources#data-wrapping
+
+
+expand providers folder
+open app service provider
+
+search for data-wrapping in the documentation
+search withoutwrapping with ctrl + f
+copy this line 
+JsonResource::withoutWrapping();
+paste it in 
+public function boot(), so it becomes
+
+public function boot()
+    {
+        JsonResource::withoutWrapping();
+    }
+}
+
+remember to import the class
+
+
+now GET again op postman to see changes 
+before, it was like this 
+
+{
+    "data": [
+        {
+            "id": 1,
+            "title": "My Book Title 1",
+            "author": "My Book Author",
+            "publisher": "My Book Publisher",
+            "created_at": "2022-12-16T14:36:22.000000Z",
+            "updated_at": "2022-12-16T15:15:15.000000Z"
+        }
+    ]
+}
+
+now it's like this 
+
+[
+    {
+        "id": 1,
+        "title": "My Book Title 1",
+        "author": "My Book Author",
+        "publisher": "My Book Publisher",
+        "created_at": "2022-12-16T14:36:22.000000Z",
+        "updated_at": "2022-12-16T15:15:15.000000Z"
+    }
+]
+
+now the CRUD API is ready to use
